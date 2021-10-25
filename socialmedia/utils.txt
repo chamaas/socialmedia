@@ -1,0 +1,362 @@
+import scrapy
+import time
+import pandas as pd
+from selenium import webdriver
+from fake_useragent import UserAgent
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from socialmedia.items import  Posts_Insta_Item
+from socialmedia.spiders import utils
+from socialmedia.spiders import DRIVER_DIR , CONNEXION_DATA ,PROXIS_FILE
+
+
+class InstaSpiderss(scrapy.Spider):
+    name = "InstaSpiderr"
+    allowed_domains = ["wwww.instagram.com"]
+    custom_settings = {
+        'DOWNLOAD_DELAY': 5,
+         }
+    
+
+    def __init__(self):
+        """
+        initialize driver
+        """
+        WINDOW_SIZE="1000,1000"
+        self.chrome_options = webdriver.ChromeOptions()
+        self.chrome_options.add_argument("--window-size=%s" % WINDOW_SIZE)
+        #self.chrome_options.add_argument("--headless")
+        self.credentials = CONNEXION_DATA
+        #?hl=fr
+    def start_requests(self):
+        url= "https://www.google.com"
+        yield scrapy.Request(url=url,callback=self.parse)
+       
+    def parse(self,response):
+        url="https://www.instagram.com/?hl=fr"
+        i=0
+        items=[]
+        c=1
+        
+       
+        
+        keys=list(self.credentials)
+        self.driver = webdriver.Chrome(f"{DRIVER_DIR}",chrome_options=self.chrome_options)
+        #self.driver.get(url="http://whatismyipaddress.com")
+        #time.sleep(2)
+        #counter=counter+1
+        username=self.credentials['user1']["usr"]
+        password= self.credentials['user1']["pass"]
+        self.driver.get(url=url)
+        time.sleep(2)
+        
+        try:
+            cookies=self.driver.find_element_by_xpath("/html/body/div[4]/div/div/button[1]")
+            cookies.click()
+        except:
+            pass
+        time.sleep(3)
+        utils.login(self.driver,username,password)
+        time.sleep(5)
+        try:
+            Info=self.driver.find_element_by_css_selector("section > main > div > div > div > div > button")
+            Info.click()
+        except:
+            pass
+       
+        queries=utils.query()
+        
+        if  not isinstance(queries, list):
+                queries = [queries]
+        for query in queries:
+          try:
+          
+              if utils.get_results_hashtag(self.driver,query) is not None:
+                url_hash,nom_hash,nombre_posts_hash,titre = utils.get_results_hashtag(self.driver,query)
+                item=Posts_Insta_Item()
+                item["titre"] = titre
+                item["nom_hash"] = nom_hash
+                item["nombre_posts_hash"] = nombre_posts_hash
+              try:
+
+                    Post_result=self.driver.find_element_by_css_selector('section > main > article > div > div > div > div:nth-child(1) > div:nth-child(1) > a')
+                    Post_result.click()                            
+                    time.sleep(1)
+                    
+                    hashtags=["#livre","#livres","#books","#book","#bookstagram", "#bookstagrammer", "#bookcommunity","#booklover","#livrestagram","instalivre","#livregram","#livreaddict"]
+                   
+                    self.driver.find_element_by_xpath("/html/body/div[6]/div[1]/div/div/a").click()
+
+                    for i in range(20):
+                            time.sleep(1)
+                            hashtags_livre=[]
+                            
+                            for elem in self.driver.find_elements_by_class_name('xil3i'):
+                                hashtags_livre.append(elem.text)
+                            if len(set(hashtags_livre).intersection(set(hashtags)))>0:
+                                item['related_post']='related post'  
+                            else:
+                                item['related_post']='unrelated post'   
+                            try:
+                              likes=self.driver.find_element_by_css_selector('section > div > div > a > span').text
+                            except:
+                                pass
+                            date_pub = self.driver.find_element_by_css_selector('div.k_Q0X.I0_K8.NnvRN > a > time').get_attribute("datetime")
+                            
+                            description=self.driver.find_element_by_css_selector('article > div > div > div > div> div > ul > div > li > div > div > div> span').text
+                            
+                            item["url"] = url_hash 
+                            item["post_link"]=self.driver.current_url
+                            item["Likes"]=likes
+                            item["date_pub"]=str(date_pub).split("T")[0]
+                            item['description']=description.replace("\n","").replace("\t","")
+                            yield item
+                            items.append(dict(item))
+                            self.driver.find_element_by_xpath("/html/body/div[6]/div[1]/div/div/a[2]").click()
+                            time.sleep(1) 
+              except:
+
+                            time.sleep(2)
+                            self.driver.get("https://www.instagram.com/?hl=fr")
+                            time.sleep(2)
+                        
+          except:            
+        
+            time.sleep(2)
+            self.driver.get("https://www.instagram.com/?hl=fr")
+            time.sleep(2)
+            try:
+                utils.logout(self.driver)
+                time.sleep(2)
+            except:
+                pass
+            if c%3 == 0:
+               fake_ua = UserAgent().random
+               PROXY=utils.proxis(PROXIS_FILE)[i]
+               self.chrome_options.add_argument(f'--user-agent={fake_ua}')
+               self.chrome_options.add_argument('--proxy-server=%s' % PROXY)
+               self.chrome_options.add_argument("ignore-certificate-errors")
+               self.driver=webdriver.Chrome(f"{DRIVER_DIR}",chrome_options=self.chrome_options)
+               i=i+1
+            try:
+                cookies=self.driver.find_element_by_xpath("/html/body/div[4]/div/div/button[1]")
+                cookies.click()
+            except:
+              pass
+            try:
+                utils.login(self.driver,self.credentials[keys[c]]['usr'],self.credentials[keys[c]]['pass'])
+                print("new acccount")
+                time.sleep(3)
+            except:
+                pass
+            
+            if c >= len(self.credentials):
+                break
+            c=c+1
+            time.sleep(5)
+
+
+
+
+
+
+
+
+
+
+
+
+import scrapy
+import time
+import logging
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.proxy import Proxy, ProxyType
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from socialmedia.items import  Posts_Insta_Item
+from socialmedia.spiders import utils
+from socialmedia.spiders import DRIVER_DIR , CONNEXION_DATA
+
+
+class InstaSpiderss(scrapy.Spider):
+    name = "InstaSpider"
+    allowed_domains = ["wwww.instagram.com"]
+    custom_settings = {
+        'DOWNLOAD_DELAY': 5,
+         }
+    
+
+    def __init__(self):
+        """
+        initialize driver
+        """
+        WINDOW_SIZE="1000,1000"
+        self.chrome_options = Options()
+        self.chrome_options.add_argument("--window-size=%s" % WINDOW_SIZE)
+        #self.chrome_options.add_argument("--headless")
+        self.credentials = CONNEXION_DATA
+        #?hl=fr
+    def start_requests(self):
+        url= "https://www.google.com"
+        yield scrapy.Request(url=url,callback=self.parse)
+       
+    def parse(self,response):
+        url="https://www.instagram.com/?hl=fr"
+        items=[]
+        c=0
+       
+        
+        keys=list(self.credentials)
+        self.driver = webdriver.Chrome(f"{DRIVER_DIR}",chrome_options=self.chrome_options)
+        #self.driver.get(url="http://whatismyipaddress.com")
+        #time.sleep(2)
+        #counter=counter+1
+        username=self.credentials['user1']["usr"]
+        password= self.credentials['user1']["pass"]
+        self.driver.get(url=url)
+        time.sleep(2)
+        
+        try:
+            cookies=self.driver.find_element_by_xpath("/html/body/div[4]/div/div/button[1]")
+            cookies.click()
+        except:
+            pass
+        
+        time.sleep(3)
+        utils.login(self.driver,username,password)
+        time.sleep(5)
+        try:
+            Info=self.driver.find_element_by_css_selector("section > main > div > div > div > div > button")
+            Info.click()
+        except:
+            pass
+       
+        queries=utils.query()
+        
+        if  not isinstance(queries, list):
+                queries = [queries]
+        for query in queries:
+          try:
+          
+              if utils.get_results_hashtag(self.driver,query) is not None:
+                self.driver.get(url=utils.get_results_hashtag(self.driver,query))
+                url_ha=self.driver.current_url
+                nom_hash=utils.get_get_selenium_value(self.driver,'section > main > header > div > div > div > h1')
+                nombre_posts_hash=utils.get_get_selenium_value(self.driver,'section > main > header > div > div > div > span > span')
+                titre=query.split("#")[1]
+                item=Posts_Insta_Item()
+                item["titre"] = titre
+                item["nom_hash"] = nom_hash
+                item["nombre_posts_hash"] = nombre_posts_hash
+                try:
+
+                    Post_result=self.driver.find_element_by_css_selector('section > main > article > div > div > div > div:nth-child(1) > div:nth-child(1) > a')
+                    Post_result.click()                            
+                    time.sleep(1)
+                    
+                    hashtags=["#livre","#livres","#books","#book","#bookstagram", "#bookstagrammer", "#bookcommunity","#booklover","#livrestagram","instalivre","#livregram","#livreaddict"]
+                
+                    self.driver.find_element_by_xpath("/html/body/div[6]/div[1]/div/div/a").click()
+                            
+                    for i in range(50):
+                            time.sleep(3)
+                            hashtags_livre=[]
+                          
+                            for elem in self.driver.find_elements_by_class_name('xil3i'):
+                                hashtags_livre.append(elem.text)
+                            if len(set(hashtags_livre).intersection(set(hashtags)))>0:
+                                item['related_post']='related post'  
+                            else:
+                                item['related_post']='unrelated post'   
+                            try:
+                              likes=self.driver.find_element_by_css_selector('section > div > div > a > span').text
+                            except:
+                                pass
+                           
+                            date_pub = self.driver.find_element_by_css_selector('div.k_Q0X.I0_K8.NnvRN > a > time').get_attribute("datetime")
+                            try:
+                                description=self.driver.find_element_by_css_selector('article > div > div > div > div> div> ul > div > li > div > div > div > span').text
+                            except:
+                                utils.logout(self.driver)
+                           
+                            item["url"] = url_ha 
+                            item["post_link"]=self.driver.current_url
+                            item["Likes"]=likes
+                            item["date_pub"]=str(date_pub).split("T")[0]
+                            item['description']=description.replace("\n","").replace("\t","")
+                            item["compte"]=self.credentials[keys[c]]['usr']
+                            yield item
+                            items.append(dict(item))
+                            
+                            self.driver.find_element_by_xpath("/html/body/div[6]/div[1]/div/div/a[2]").click()
+                             
+                except:
+
+                            time.sleep(2)
+                            self.driver.get("https://www.instagram.com/?hl=fr")
+                            time.sleep(2)
+                        
+          except:            
+        
+            time.sleep(2)
+            self.driver.get("https://www.instagram.com/?hl=fr")
+            time.sleep(2)
+            try:
+                utils.logout(self.driver)
+                time.sleep(2)
+            except:
+                pass
+            c=c+1
+            try:
+                utils.login(self.driver,self.credentials[keys[c]]['usr'],self.credentials[keys[c]]['pass'])
+                print("new acccount")
+            except:
+                pass
+            if c >= len(self.credentials):
+                break
+            time.sleep(5)
+           
+            
+                
+                
+                
+                
+        
+           
+        df = pd.DataFrame(columns=['post_link','description','related_post','Likes','date_pub','url','nombre_posts_hash','nom_hash','titre','compte'])
+        for i,item in zip(range(len(items)),items):
+                df.loc[i,'post_link']=item["post_link"]
+                df.loc[i,'description']=item["description"]
+                df.loc[i,'related_post']=item["related_post"]
+                df.loc[i,'Likes']=item["Likes"]
+                df.loc[i,'date_pub']=item["date_pub"]
+                df.loc[i,'url']=item["url"]
+                df.loc[i,'nombre_posts_hash']=item["nombre_posts_hash"]
+                df.loc[i,'nom_hash']=item["nom_hash"]
+                df.loc[i,'titre']=item["titre"]
+                df.loc[i,'compte']=item["compte"]
+        df.to_excel('Posts_Insta.xlsx', index=True, encoding='utf-8')
+
+
+
+
+import schedule
+import time
+from scrapy.crawler import CrawlerProcess
+from scrapy.utils.project import get_project_settings
+def Crawlprocess():
+    process = CrawlerProcess(get_project_settings())
+
+# myspd1 Is a crawl name
+    process.crawl('InstaSpider_semaine')
+
+    process.start()
+
+
+schedule.every(2).minutes.do(Crawlprocess)
+
+
+while True:
+    schedule.run_pending()
+    time.sleep(1)
